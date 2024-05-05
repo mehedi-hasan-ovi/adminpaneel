@@ -1,0 +1,1907 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // uses connection pooling
+}
+
+model AppConfiguration {
+  id                                     String   @id @default(cuid())
+  updatedAt                              DateTime @updatedAt
+  name                                   String
+  url                                    String
+  authRequireEmailVerification           Boolean  @default(false)
+  authRequireOrganization                Boolean  @default(true)
+  authRequireName                        Boolean  @default(true)
+  authRecaptchaSiteKey                   String?
+  analyticsEnabled                       Boolean  @default(true)
+  analyticsSimpleAnalytics               Boolean  @default(false)
+  analyticsPlausibleAnalytics            Boolean  @default(false)
+  analyticsGoogleAnalyticsTrackingId     String?
+  subscriptionRequired                   Boolean  @default(true)
+  subscriptionAllowSubscribeBeforeSignUp Boolean  @default(true)
+  subscriptionAllowSignUpBeforeSubscribe Boolean  @default(true)
+  cookiesEnabled                         Boolean  @default(false)
+  metricsEnabled                         Boolean  @default(false)
+  metricsLogToConsole                    Boolean  @default(false)
+  metricsSaveToDatabase                  Boolean  @default(false)
+  metricsIgnoreUrls                      String?
+  brandingLogo                           String?
+  brandingLogoDarkMode                   String?
+  brandingIcon                           String?
+  brandingIconDarkMode                   String?
+  brandingFavicon                        String?
+}
+
+model AppCookie {
+  id          String  @id @default(cuid())
+  category    Int
+  name        String
+  description String
+  enabled     Boolean @default(true)
+  expiry      String?
+  domain      String?
+  type        String?
+  href        String?
+}
+
+model User {
+  id                         String                       @id @default(cuid())
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
+  email                      String                       @unique
+  passwordHash               String
+  firstName                  String
+  lastName                   String
+  avatar                     String?
+  phone                      String?
+  defaultTenantId            String?
+  verifyToken                String?
+  githubId                   String?                      @unique
+  googleId                   String?                      @unique
+  locale                     String?
+  active                     Boolean                      @default(false)
+  admin                      AdminUser? // Has access to the admin panel
+  createdApiKeys             ApiKey[]
+  workflowSteps              EntityWorkflowStepAssignee[]
+  createdGroups              Group[]
+  groups                     GroupUser[]
+  createdLinkedAccounts      LinkedAccount[]
+  logs                       Log[]
+  createdRows                Row[]
+  createdRowComments         RowComment[]
+  createdRowCommentReactions RowCommentReaction[]
+  createdEntityViews         EntityView[]                 @relation("createdByUser")
+  rowPermissions             RowPermission[]
+  assignedTasks              RowTask[]                    @relation("assignedToUser")
+  completedTasks             RowTask[]                    @relation("completedByUser")
+  createdRowTasks            RowTask[]                    @relation("createdByUser")
+  workflowTransitions        RowWorkflowTransition[]
+  tenants                    TenantUser[]
+  invitation                 TenantUserInvitation?
+  roles                      UserRole[]
+  readEmails                 EmailRead[]
+  entityViews                EntityView[]
+  onboardingSessions         OnboardingSession[]
+  tags                       TagUser[]
+  tenantIpAddresses          TenantIpAddress[]
+  promptFlowExecutions       PromptFlowExecution[]
+  analyticsUniqueSessions    AnalyticsUniqueVisitor[]
+  metricLogs                 MetricLog[]
+  formulaLogs                FormulaLog[]
+  createdTenantRelationships TenantRelationship[]
+  blogArticles               BlogPost[]
+  knowledgeBaseArticles      KnowledgeBaseArticle[]
+}
+
+// Has access to the admin panel
+model AdminUser {
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Tenant {
+  id                       String                       @id @default(cuid())
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  slug                     String                       @unique
+  name                     String
+  icon                     String?
+  subscriptionId           String?
+  active                   Boolean                      @default(false)
+  deactivatedReason        String?
+  apiKeys                  ApiKey[]
+  workflowSteps            EntityWorkflowStepAssignee[]
+  groups                   Group[]
+  asClientLinkedAccounts   LinkedAccount[]              @relation("clientTenant")
+  createdLinkedAccounts    LinkedAccount[]              @relation("createdByTenant")
+  asProviderLinkedAccounts LinkedAccount[]              @relation("providerTenant")
+  logs                     Log[]
+  rows                     Row[]
+  rowPermissions           RowPermission[]
+  subscription             TenantSubscription?
+  users                    TenantUser[]
+  invitations              TenantUserInvitation[]
+  userRoles                UserRole[]
+  inboundAddresses         TenantInboundAddress[]
+  events                   Event[]
+  fromRegistration         Registration?
+  entityViews              EntityView[]
+  emailSenders             EmailSender[]
+  campaigns                Campaign[]
+  outboundEmails           OutboundEmail[]
+  tags                     TagTenant[]
+  onboardingSessions       OnboardingSession[]
+  ipAddresses              TenantIpAddress[]
+  tenantSettingsRow        TenantSettingsRow?
+  promptFlowExecutions     PromptFlowExecution[]
+  metricLogs               MetricLog[]
+  formulaLogs              FormulaLog[]
+  types                    TenantType[]
+  fromTenants              TenantRelationship[]         @relation("fromTenant")
+  toTenants                TenantRelationship[]         @relation("toTenant")
+  entityProperties         Property[]
+  blogPosts                BlogPost[]
+  blogTags                 BlogTag[]
+  blogCategories           BlogCategory[]
+
+  @@index([slug])
+}
+
+model Registration {
+  id                          String   @id @default(cuid())
+  createdAt                   DateTime @default(now())
+  email                       String   @unique
+  firstName                   String
+  lastName                    String
+  token                       String   @unique
+  ipAddress                   String?
+  company                     String?
+  selectedSubscriptionPriceId String?
+  createdTenantId             String?  @unique
+  createdTenant               Tenant?  @relation(fields: [createdTenantId], references: [id], onDelete: Cascade)
+}
+
+model Blacklist {
+  id               String   @id @default(cuid())
+  createdAt        DateTime @default(now())
+  type             String // email, domain, ip
+  value            String
+  active           Boolean  @default(true)
+  registerAttempts Int      @default(0)
+}
+
+model TenantSubscription {
+  id               String                      @id @default(cuid())
+  tenantId         String                      @unique
+  stripeCustomerId String?
+  tenant           Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products         TenantSubscriptionProduct[]
+}
+
+model TenantSubscriptionProduct {
+  id                    String                           @id @default(cuid())
+  createdAt             DateTime                         @default(now())
+  tenantSubscriptionId  String
+  subscriptionProductId String
+  cancelledAt           DateTime?
+  endsAt                DateTime?
+  stripeSubscriptionId  String?
+  quantity              Int?
+  fromCheckoutSessionId String?
+  currentPeriodStart    DateTime?
+  currentPeriodEnd      DateTime?
+  tenantSubscription    TenantSubscription               @relation(fields: [tenantSubscriptionId], references: [id], onDelete: Cascade)
+  subscriptionProduct   SubscriptionProduct              @relation(fields: [subscriptionProductId], references: [id])
+  prices                TenantSubscriptionProductPrice[]
+}
+
+model TenantSubscriptionProductPrice {
+  id                            String                          @id @default(cuid())
+  tenantSubscriptionProductId   String
+  tenantSubscriptionProduct     TenantSubscriptionProduct       @relation(fields: [tenantSubscriptionProductId], references: [id], onDelete: Cascade)
+  subscriptionPriceId           String?
+  subscriptionPrice             SubscriptionPrice?              @relation(fields: [subscriptionPriceId], references: [id])
+  subscriptionUsageBasedPriceId String?
+  subscriptionUsageBasedPrice   SubscriptionUsageBasedPrice?    @relation(fields: [subscriptionUsageBasedPriceId], references: [id])
+  usageRecords                  TenantSubscriptionUsageRecord[]
+}
+
+model TenantSubscriptionUsageRecord {
+  id                               String                         @id @default(cuid())
+  tenantSubscriptionProductPriceId String
+  tenantSubscriptionProductPrice   TenantSubscriptionProductPrice @relation(fields: [tenantSubscriptionProductPriceId], references: [id], onDelete: Cascade)
+  timestamp                        Int
+  quantity                         Int
+  stripeSubscriptionItemId         String?
+}
+
+model CheckoutSessionStatus {
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  id              String   @unique
+  pending         Boolean  @default(true) // has not added products to tenant
+  email           String
+  fromUrl         String
+  fromUserId      String?
+  fromTenantId    String?
+  createdUserId   String?
+  createdTenantId String?
+}
+
+model TenantUser {
+  id        String           @id @default(cuid())
+  createdAt DateTime         @default(now())
+  tenantId  String
+  userId    String
+  type      Int
+  joined    Int
+  status    Int
+  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles     TenantUserRole[]
+}
+
+model Role {
+  id               String                       @id @default(cuid())
+  createdAt        DateTime                     @default(now())
+  updatedAt        DateTime                     @updatedAt
+  name             String                       @unique
+  description      String
+  type             String
+  assignToNewUsers Boolean
+  isDefault        Boolean
+  order            Int
+  workflowSteps    EntityWorkflowStepAssignee[]
+  permissions      RolePermission[]
+  rowPermissions   RowPermission[]
+  users            UserRole[]
+}
+
+model Permission {
+  id                        String                   @id @default(cuid())
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  name                      String                   @unique
+  description               String
+  type                      String
+  isDefault                 Boolean
+  order                     Int
+  inRoles                   RolePermission[]
+  entityId                  String?
+  entity                    Entity?                  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  inTenantTypeRelationships TenantTypeRelationship[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  userId    String
+  roleId    String
+  tenantId  String?
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Group {
+  id              String                       @id @default(cuid())
+  createdAt       DateTime                     @default(now())
+  createdByUserId String
+  tenantId        String?
+  name            String
+  description     String
+  color           Int
+  createdByUser   User                         @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  tenant          Tenant?                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowSteps   EntityWorkflowStepAssignee[]
+  users           GroupUser[]
+  rowPermissions  RowPermission[]
+}
+
+model GroupUser {
+  id      String @id @default(cuid())
+  groupId String
+  userId  String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TenantUserRole {
+  id           String     @id @default(cuid())
+  tenantUserId String
+  order        Int
+  name         String
+  tenantUser   TenantUser @relation(fields: [tenantUserId], references: [id], onDelete: Cascade)
+}
+
+model TenantUserInvitation {
+  id            String  @id @default(cuid())
+  tenantId      String
+  email         String
+  firstName     String
+  lastName      String
+  type          Int
+  pending       Boolean
+  createdUserId String? @unique
+  user          User?   @relation(fields: [createdUserId], references: [id], onDelete: Cascade)
+  tenant        Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model LinkedAccount {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  createdByUserId   String
+  createdByTenantId String
+  providerTenantId  String
+  clientTenantId    String
+  status            Int
+  clientTenant      Tenant   @relation("clientTenant", fields: [clientTenantId], references: [id], onDelete: Cascade)
+  createdByTenant   Tenant   @relation("createdByTenant", fields: [createdByTenantId], references: [id], onDelete: Cascade)
+  createdByUser     User     @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  providerTenant    Tenant   @relation("providerTenant", fields: [providerTenantId], references: [id], onDelete: Cascade)
+}
+
+model ApiKey {
+  id                String                  @id @default(cuid())
+  createdAt         DateTime                @default(now())
+  createdByUserId   String
+  tenantId          String
+  key               String                  @default(uuid())
+  alias             String
+  expires           DateTime?
+  active            Boolean
+  createdByUser     User                    @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entities          ApiKeyEntity[]
+  apiKeyLogs        ApiKeyLog[]
+  logs              Log[]
+  createdRows       Row[]
+  transitions       RowWorkflowTransition[]
+  tenantIpAddresses TenantIpAddress[]
+
+  @@unique([tenantId, alias])
+}
+
+model ApiKeyEntity {
+  id       String  @id @default(cuid())
+  apiKeyId String
+  entityId String
+  create   Boolean
+  read     Boolean
+  update   Boolean
+  delete   Boolean
+  apiKey   ApiKey  @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  entity   Entity  @relation(fields: [entityId], references: [id], onDelete: Cascade)
+}
+
+model Log {
+  id                   String                 @id @default(cuid())
+  createdAt            DateTime               @default(now())
+  tenantId             String?
+  userId               String?
+  apiKeyId             String?
+  rowId                String?
+  url                  String
+  action               String
+  details              String?
+  commentId            String?
+  workflowTransitionId String?
+  apiKey               ApiKey?                @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  comment              RowComment?            @relation(fields: [commentId], references: [id])
+  row                  Row?                   @relation(fields: [rowId], references: [id])
+  tenant               Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user                 User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflowTransition   RowWorkflowTransition? @relation(fields: [workflowTransitionId], references: [id])
+  webhookLogs          EntityWebhookLog[]
+}
+
+model ApiKeyLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  apiKeyId  String?
+  ip        String
+  endpoint  String
+  method    String
+  params    String
+  status    Int?
+  error     String?
+  apiKey    ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+}
+
+model SubscriptionProduct {
+  id                 String                        @id @default(cuid())
+  stripeId           String
+  order              Int
+  title              String
+  active             Boolean
+  model              Int
+  public             Boolean
+  groupTitle         String?
+  groupDescription   String?
+  description        String?
+  badge              String?
+  prices             SubscriptionPrice[]
+  features           SubscriptionFeature[]
+  tenantProducts     TenantSubscriptionProduct[]
+  usageBasedPrices   SubscriptionUsageBasedPrice[]
+  assignsTenantTypes TenantType[]
+}
+
+model SubscriptionPrice {
+  id                    String                           @id @default(cuid())
+  subscriptionProductId String
+  subscriptionProduct   SubscriptionProduct              @relation(fields: [subscriptionProductId], references: [id], onDelete: Cascade)
+  stripeId              String
+  type                  Int
+  billingPeriod         Int
+  price                 Decimal
+  currency              String
+  trialDays             Int
+  active                Boolean
+  tenantProductPrices   TenantSubscriptionProductPrice[]
+}
+
+model SubscriptionUsageBasedPrice {
+  id                    String                           @id @default(cuid())
+  subscriptionProductId String
+  subscriptionProduct   SubscriptionProduct              @relation(fields: [subscriptionProductId], references: [id], onDelete: Cascade)
+  stripeId              String
+  billingPeriod         Int
+  currency              String
+  unit                  String
+  unitTitle             String
+  unitTitlePlural       String
+  usageType             String
+  aggregateUsage        String
+  tiersMode             String
+  billingScheme         String
+  tiers                 SubscriptionUsageBasedTier[]
+  tenantProductPrices   TenantSubscriptionProductPrice[]
+}
+
+model SubscriptionUsageBasedTier {
+  id                            String                      @id @default(cuid())
+  subscriptionUsageBasedPriceId String
+  subscriptionUsageBasedPrice   SubscriptionUsageBasedPrice @relation(fields: [subscriptionUsageBasedPriceId], references: [id], onDelete: Cascade)
+  from                          Int
+  to                            Int?
+  perUnitPrice                  Decimal?
+  flatFeePrice                  Decimal?
+}
+
+model SubscriptionFeature {
+  id                    String              @id @default(cuid())
+  subscriptionProductId String
+  order                 Int
+  title                 String
+  name                  String
+  type                  Int
+  value                 Int
+  href                  String?
+  subscriptionProduct   SubscriptionProduct @relation(fields: [subscriptionProductId], references: [id], onDelete: Cascade)
+}
+
+model BlogCategory {
+  id        String     @id @default(cuid())
+  createdAt DateTime   @default(now())
+  tenantId  String?
+  tenant    Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  color     Int
+  posts     BlogPost[]
+
+  @@unique([tenantId, name])
+}
+
+model BlogTag {
+  id        String        @id @default(cuid())
+  createdAt DateTime      @default(now())
+  tenantId  String?
+  tenant    Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String        @unique
+  color     Int
+  posts     BlogPostTag[]
+}
+
+model BlogPostTag {
+  id     String   @id @default(cuid())
+  postId String
+  tagId  String
+  post   BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    BlogTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+}
+
+model BlogPost {
+  id          String        @id @default(cuid())
+  createdAt   DateTime      @default(now())
+  tenantId    String?
+  tenant      Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slug        String
+  title       String
+  description String
+  date        DateTime
+  image       String
+  content     String
+  readingTime String
+  published   Boolean
+  authorId    String?
+  categoryId  String?
+  contentType String        @default("markdown")
+  author      User?         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  category    BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  tags        BlogPostTag[]
+
+  @@unique([tenantId, slug])
+}
+
+// <--- START: Entities --->
+
+// TODO: Wrap entities in modules (e.g. CRM, HelpDesk...)
+model Module {
+  id          String   @id @default(cuid())
+  type        String   @default("app") // app, admin, all
+  order       Int
+  name        String   @unique
+  title       String
+  description String
+  icon        String
+  entities    Entity[]
+}
+
+model Entity {
+  id                  String                       @id @default(cuid())
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  moduleId            String?
+  name                String                       @unique
+  slug                String                       @unique
+  order               Int
+  prefix              String                       @unique
+  type                String                       @default("app") // app, admin, all
+  title               String
+  titlePlural         String
+  isAutogenerated     Boolean
+  hasApi              Boolean
+  icon                String
+  active              Boolean
+  showInSidebar       Boolean                      @default(true)
+  hasTags             Boolean                      @default(true)
+  hasComments         Boolean                      @default(true)
+  hasTasks            Boolean                      @default(true)
+  hasWorkflow         Boolean                      @default(false)
+  hasActivity         Boolean                      @default(true)
+  hasBulkDelete       Boolean                      @default(false)
+  defaultVisibility   String                       @default("private")
+  onCreated           String?                      @default("redirectToOverview") // redirectToOverview, redirectToNew, redirectToList, redirectToEdit, addAnother
+  onEdit              String?                      @default("editRoute") // editRoute, overviewRoute, overviewAlwaysEditable
+  promptFlowGroupId   String?
+  createdPermissions  Permission[]
+  apiKeys             ApiKeyEntity[]
+  tags                EntityTag[]
+  permissions         EntityTenantUserPermission[]
+  webhooks            EntityWebhook[]
+  workflowStates      EntityWorkflowState[]
+  workflowSteps       EntityWorkflowStep[]
+  properties          Property[]
+  rows                Row[]
+  views               EntityView[]
+  parentEntities      EntityRelationship[]         @relation(name: "childEntities")
+  childEntities       EntityRelationship[]         @relation(name: "parentEntities")
+  module              Module?                      @relation(fields: [moduleId], references: [id])
+  groups              EntityGroupEntity[]
+  promptFlowGroup     PromptFlowGroupEntity[]
+  inTenantTypes       TenantTypeEntity[]
+  promptFlows         PromptFlow[]
+  inPromptFlowOutputs PromptFlowOutput[]
+
+  @@index([name], name: "entity_name")
+  @@index([slug], name: "entity_slug")
+}
+
+model Property {
+  id                   String                    @id @default(cuid())
+  entityId             String
+  order                Int
+  name                 String
+  title                String
+  type                 Int
+  subtype              String?
+  isDynamic            Boolean
+  isDefault            Boolean
+  isRequired           Boolean
+  isHidden             Boolean
+  isDisplay            Boolean                   @default(false)
+  isUnique             Boolean                   @default(false) // TODO: Validate uniqueness
+  isReadOnly           Boolean                   @default(false)
+  showInCreate         Boolean                   @default(true)
+  canUpdate            Boolean                   @default(true)
+  tenantId             String?
+  tenant               Tenant?                   @relation(fields: [tenantId], references: [id])
+  formulaId            String?
+  formula              Formula?                  @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  attributes           PropertyAttribute[]
+  entity               Entity                    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  options              PropertyOption[]
+  values               RowValue[]
+  inViewProperties     EntityViewProperty[]
+  inViewGroupBy        EntityView[]
+  inPromptFlowMappings PromptFlowOutputMapping[]
+
+  @@unique([entityId, name, tenantId])
+  @@unique([entityId, title, tenantId])
+  @@index([entityId], name: "entity_property")
+  @@index([entityId, name], name: "entity_property_name")
+}
+
+model EntityView {
+  id                    String               @id @default(cuid())
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  createdByUserId       String?
+  createdByUser         User?                @relation(name: "createdByUser", fields: [createdByUserId], references: [id])
+  entityId              String
+  entity                Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  tenantId              String?
+  tenant                Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId                String?
+  user                  User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  layout                String               @default("table") // table, board, calendar, list, gallery...
+  order                 Int
+  name                  String
+  title                 String
+  pageSize              Int
+  isDefault             Boolean
+  isSystem              Boolean              @default(false)
+  gridColumns           Int?                 @default(5)
+  gridColumnsSm         Int?                 @default(2)
+  gridColumnsMd         Int?                 @default(3)
+  gridColumnsLg         Int?                 @default(4)
+  gridColumnsXl         Int?                 @default(5)
+  gridColumns2xl        Int?                 @default(6)
+  gridGap               String?              @default("sm")
+  properties            EntityViewProperty[]
+  filters               EntityViewFilter[]
+  sort                  EntityViewSort[]
+  groupByWorkflowStates Boolean              @default(false)
+  groupByPropertyId     String?
+  groupByProperty       Property?            @relation(fields: [groupByPropertyId], references: [id], onDelete: Cascade)
+  inGroups              EntityGroupEntity[]
+  inChildRelationships  EntityRelationship[] @relation(name: "childEntityView")
+  inParentRelationships EntityRelationship[] @relation(name: "parentEntityView")
+
+  @@index([entityId], name: "entity_view")
+  @@index([entityId, name], name: "entity_view_name")
+}
+
+model EntityViewProperty {
+  id           String     @id @default(cuid())
+  entityViewId String
+  entityView   EntityView @relation(fields: [entityViewId], references: [id], onDelete: Cascade)
+  propertyId   String?
+  property     Property?  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name         String? // if not a property, e.g. "default.folio"
+  order        Int
+
+  @@index([entityViewId], name: "entity_view_property")
+  @@index([entityViewId, name], name: "entity_view_property_name")
+}
+
+model EntityViewFilter {
+  id           String     @id @default(cuid())
+  entityViewId String
+  entityView   EntityView @relation(fields: [entityViewId], references: [id], onDelete: Cascade)
+  match        String     @default("and") // and, or
+  name         String
+  condition    String // is, isNot, contains, doesNotContain...
+  value        String
+
+  @@index([entityViewId], name: "entity_view_filter")
+  @@index([entityViewId, name], name: "entity_view_filter_name")
+}
+
+model EntityViewSort {
+  id           String     @id @default(cuid())
+  entityViewId String
+  entityView   EntityView @relation(fields: [entityViewId], references: [id], onDelete: Cascade)
+  name         String
+  asc          Boolean
+  order        Int
+
+  @@index([entityViewId], name: "entity_view_sort")
+  @@index([entityViewId, name], name: "entity_view_sort_name")
+}
+
+model PropertyAttribute {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String // pattern, min, max, step, rows, defaultValue, maxSize, acceptFileTypes, uppercase...
+  value      String
+
+  @@unique([propertyId, name])
+  @@index([propertyId], name: "property_attribute")
+  @@index([propertyId, name], name: "property_attribute_name")
+}
+
+model PropertyOption {
+  id         String   @id @default(cuid())
+  propertyId String
+  order      Int
+  value      String
+  name       String?
+  color      Int      @default(0)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // values     RowValueSelection[]
+
+  @@index([propertyId], name: "property_option")
+  @@index([propertyId, name], name: "property_option_name")
+}
+
+model EntityTag {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  entityId  String
+  value     String
+  color     Int
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  rowTags   RowTag[]
+
+  @@index([entityId], name: "entity_tag")
+  @@index([entityId, value], name: "entity_tag_value")
+}
+
+model EntityTenantUserPermission {
+  id       String @id @default(cuid())
+  entityId String
+  level    Int
+  entity   Entity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+}
+
+model EntityWebhook {
+  id       String             @id @default(cuid())
+  entityId String
+  action   String
+  method   String
+  endpoint String
+  entity   Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  logs     EntityWebhookLog[]
+}
+
+model EntityWebhookLog {
+  id        String        @id @default(cuid())
+  webhookId String
+  logId     String
+  status    Int
+  error     String?
+  log       Log           @relation(fields: [logId], references: [id], onDelete: Cascade)
+  webhook   EntityWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+}
+
+model EntityWorkflowState {
+  id           String               @id @default(cuid())
+  entityId     String
+  order        Int
+  name         String
+  title        String
+  color        Int
+  canUpdate    Boolean
+  canDelete    Boolean
+  emailSubject String
+  emailBody    String
+  progress     Int?
+  entity       Entity               @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  fromStates   EntityWorkflowStep[] @relation("fromState")
+  toStates     EntityWorkflowStep[] @relation("toState")
+  rows         Row[]
+
+  @@index([entityId], name: "entity_workflow_state")
+  @@index([entityId, name], name: "entity_workflow_state_name")
+}
+
+model EntityWorkflowStep {
+  id          String                       @id @default(cuid())
+  entityId    String
+  action      String
+  fromStateId String
+  toStateId   String
+  assignTo    String                       @default("private")
+  entity      Entity                       @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  fromState   EntityWorkflowState          @relation("fromState", fields: [fromStateId], references: [id], onDelete: Cascade)
+  toState     EntityWorkflowState          @relation("toState", fields: [toStateId], references: [id], onDelete: Cascade)
+  assignees   EntityWorkflowStepAssignee[]
+  transitions RowWorkflowTransition[]
+
+  @@index([entityId], name: "entity_workflow_step")
+}
+
+model EntityWorkflowStepAssignee {
+  id       String             @id @default(cuid())
+  stepId   String
+  tenantId String?
+  roleId   String?
+  groupId  String?
+  userId   String?
+  group    Group?             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  role     Role?              @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  step     EntityWorkflowStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  tenant   Tenant?            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EntityRelationship {
+  id                 String            @id @default(cuid())
+  parentId           String
+  parent             Entity            @relation(name: "parentEntities", fields: [parentId], references: [id], onDelete: Cascade)
+  childId            String
+  child              Entity            @relation(name: "childEntities", fields: [childId], references: [id], onDelete: Cascade)
+  order              Int?
+  title              String?
+  type               String            @default("one-to-many")
+  required           Boolean           @default(false)
+  cascade            Boolean           @default(false)
+  readOnly           Boolean           @default(false)
+  hiddenIfEmpty      Boolean           @default(false)
+  childEntityViewId  String?
+  childEntityView    EntityView?       @relation(name: "childEntityView", fields: [childEntityViewId], references: [id], onDelete: Cascade)
+  parentEntityViewId String?
+  parentEntityView   EntityView?       @relation(name: "parentEntityView", fields: [parentEntityViewId], references: [id], onDelete: Cascade)
+  rows               RowRelationship[]
+
+  @@unique([parentId, childId, title])
+  @@index([parentId], name: "parent_entity_relationship")
+  @@index([childId], name: "child_entity_relationship")
+  @@index([parentId, childId], name: "parent_child_entity_relationship")
+  @@index([parentId, childId, order], name: "parent_child_entity_relationship_order")
+}
+
+model SampleCustomEntity {
+  rowId         String   @unique
+  row           Row      @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  customText    String
+  customNumber  Decimal
+  customDate    DateTime
+  customBoolean Boolean
+  customSelect  String
+}
+
+model RowRelationship {
+  id             String             @id @default(cuid())
+  relationshipId String
+  relationship   EntityRelationship @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  parentId       String
+  parent         Row                @relation(name: "parentRow", fields: [parentId], references: [id], onDelete: Cascade)
+  childId        String
+  child          Row                @relation(name: "childRow", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId])
+  @@index([parentId], name: "parent_row_relationship")
+  @@index([childId], name: "child_row_relationship")
+  @@index([parentId, childId], name: "parent_child_row_relationship")
+}
+
+model Row {
+  id                     String                  @id @default(cuid())
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  entityId               String
+  tenantId               String?
+  folio                  Int
+  createdByUserId        String?
+  createdByApiKeyId      String?
+  workflowStateId        String?
+  order                  Int                     @default(0)
+  createdByApiKey        ApiKey?                 @relation(fields: [createdByApiKeyId], references: [id])
+  createdByUser          User?                   @relation(fields: [createdByUserId], references: [id])
+  entity                 Entity                  @relation(fields: [entityId], references: [id])
+  tenant                 Tenant?                 @relation(fields: [tenantId], references: [id])
+  workflowState          EntityWorkflowState?    @relation(fields: [workflowStateId], references: [id])
+  logs                   Log[]
+  comments               RowComment[]
+  permissions            RowPermission[]
+  tags                   RowTag[]
+  tasks                  RowTask[]
+  values                 RowValue[]
+  transitions            RowWorkflowTransition[]
+  childRows              RowRelationship[]       @relation("parentRow")
+  parentRows             RowRelationship[]       @relation("childRow")
+  sampleCustomEntity     SampleCustomEntity?
+  outboundEmails         OutboundEmail[]
+  tenantSettingsRow      TenantSettingsRow[]
+  formulaCalculationLogs FormulaComponentLog[]
+
+  @@index([entityId], name: "row_entity")
+  @@index([entityId, tenantId], name: "row_entity_tenant")
+  @@index([tenantId], name: "row_tenant")
+}
+
+model RowValue {
+  id           String             @id @default(cuid())
+  rowId        String
+  propertyId   String
+  textValue    String?
+  numberValue  Decimal?
+  dateValue    DateTime?
+  booleanValue Boolean?
+  // selection    RowValueSelection[] // TODO: MULTI SELECT
+  property     Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  row          Row                @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  media        RowMedia[]
+  multiple     RowValueMultiple[]
+  range        RowValueRange?
+
+  @@index([rowId], name: "row_value_row")
+  @@index([rowId, propertyId], name: "row_value_row_property")
+}
+
+model RowValueMultiple {
+  id         String   @id @default(cuid())
+  rowValueId String
+  order      Int
+  value      String
+  rowValue   RowValue @relation(fields: [rowValueId], references: [id], onDelete: Cascade)
+
+  @@index([rowValueId], name: "row_value_multiple_row_value")
+}
+
+model RowValueRange {
+  rowValueId String    @unique
+  numberMin  Decimal?
+  numberMax  Decimal?
+  dateMin    DateTime?
+  dateMax    DateTime?
+  rowValue   RowValue  @relation(fields: [rowValueId], references: [id], onDelete: Cascade)
+
+  @@index([rowValueId], name: "row_value_range_row_value")
+}
+
+// // TODO: MULTI SELECT
+// model RowValueSelection {
+//   id               String         @id @default(cuid())
+//   rowValueId       String
+//   propertyOptionId String
+//   propertyOption   PropertyOption @relation(fields: [propertyOptionId], references: [id], onDelete: Cascade)
+//   rowValue         RowValue       @relation(fields: [rowValueId], references: [id], onDelete: Cascade)
+// }
+
+model RowPermission {
+  id       String   @id @default(cuid())
+  rowId    String
+  tenantId String?
+  roleId   String?
+  groupId  String?
+  userId   String?
+  public   Boolean?
+  access   String   @default("view")
+  group    Group?   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  role     Role?    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  row      Row      @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([rowId], name: "row_permission_row")
+  @@index([rowId, tenantId], name: "row_permission_row_tenant")
+  @@index([rowId, roleId], name: "row_permission_row_role")
+  @@index([rowId, groupId], name: "row_permission_row_group")
+  @@index([rowId, userId], name: "row_permission_row_user")
+}
+
+model RowMedia {
+  id              String   @id @default(cuid())
+  rowValueId      String
+  title           String
+  name            String
+  file            String
+  type            String
+  publicUrl       String?
+  storageBucket   String?
+  storageProvider String?
+  rowValue        RowValue @relation(fields: [rowValueId], references: [id], onDelete: Cascade)
+
+  @@index([rowValueId], name: "row_media_row_value")
+  @@index([rowValueId, name], name: "row_media_row_value_name")
+}
+
+model RowTag {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  rowId     String
+  tagId     String
+  row       Row       @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  tag       EntityTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([rowId], name: "row_tag_row")
+  @@index([rowId, tagId], name: "row_tag_row_tag")
+}
+
+model RowComment {
+  id              String               @id @default(cuid())
+  createdAt       DateTime             @default(now())
+  createdByUserId String
+  rowId           String
+  value           String
+  isDeleted       Boolean?
+  createdByUser   User                 @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  row             Row                  @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  logs            Log[]
+  reactions       RowCommentReaction[]
+
+  @@index([rowId], name: "row_comment_row")
+}
+
+model RowCommentReaction {
+  id              String     @id @default(cuid())
+  createdAt       DateTime   @default(now())
+  createdByUserId String
+  rowCommentId    String
+  reaction        String
+  createdByUser   User       @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  rowComment      RowComment @relation(fields: [rowCommentId], references: [id], onDelete: Cascade)
+}
+
+model RowTask {
+  id                String    @id @default(cuid())
+  createdAt         DateTime  @default(now())
+  createdByUserId   String
+  rowId             String
+  title             String
+  description       String
+  completed         Boolean
+  completedAt       DateTime?
+  completedByUserId String?
+  assignedToUserId  String?
+  deadline          DateTime?
+  assignedToUser    User?     @relation("assignedToUser", fields: [assignedToUserId], references: [id], onDelete: Cascade)
+  completedByUser   User?     @relation("completedByUser", fields: [completedByUserId], references: [id], onDelete: Cascade)
+  createdByUser     User      @relation("createdByUser", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  row               Row       @relation(fields: [rowId], references: [id], onDelete: Cascade)
+}
+
+model RowWorkflowTransition {
+  id                      String               @id @default(cuid())
+  createdAt               DateTime             @default(now())
+  byUserId                String?
+  byApiKeyId              String?
+  byEmailId               String?
+  byEventWebhookAttemptId String?
+  rowId                   String
+  workflowStepId          String
+  byUser                  User?                @relation(fields: [byUserId], references: [id], onDelete: Cascade)
+  byApiKey                ApiKey?              @relation(fields: [byApiKeyId], references: [id], onDelete: Cascade)
+  byEmail                 Email?               @relation(fields: [byEmailId], references: [id], onDelete: Cascade)
+  byEventWebhookAttempt   EventWebhookAttempt? @relation(fields: [byEventWebhookAttemptId], references: [id], onDelete: Cascade)
+  row                     Row                  @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  workflowStep            EntityWorkflowStep   @relation(fields: [workflowStepId], references: [id], onDelete: Cascade)
+  logs                    Log[]
+}
+
+// <--- END: Entities --->
+
+// <--- START: Inbound Emails --->
+
+model TenantInboundAddress {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  address  String  @unique
+  email    Email[]
+}
+
+model Email {
+  id                     String                  @id @default(cuid())
+  tenantInboundAddressId String?
+  tenantInboundAddress   TenantInboundAddress?   @relation(fields: [tenantInboundAddressId], references: [id], onDelete: Cascade)
+  messageId              String                  @unique
+  type                   String // inbound, outbound
+  date                   DateTime
+  subject                String
+  fromEmail              String
+  fromName               String?
+  toEmail                String
+  toName                 String?
+  textBody               String
+  htmlBody               String
+  reads                  EmailRead[]
+  attachments            EmailAttachment[]
+  cc                     EmailCc[]
+  transitions            RowWorkflowTransition[]
+}
+
+model EmailRead {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  emailId   String
+  email     Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailCc {
+  id      String  @id @default(cuid())
+  emailId String
+  toEmail String
+  toName  String?
+  email   Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+}
+
+model EmailAttachment {
+  id              String  @id @default(cuid())
+  emailId         String
+  name            String
+  type            String
+  length          Int
+  content         String
+  publicUrl       String?
+  storageBucket   String?
+  storageProvider String?
+  email           Email   @relation(fields: [emailId], references: [id], onDelete: Cascade)
+}
+
+// <--- END: Inbound Emails --->
+
+// <--- START: Events --->
+
+model Event {
+  id        String                @id @default(cuid())
+  createdAt DateTime              @default(now())
+  tenantId  String?
+  tenant    Tenant?               @relation(fields: [tenantId], references: [id])
+  name      String
+  data      String
+  resource  String?
+  attempts  EventWebhookAttempt[]
+}
+
+model EventWebhookAttempt {
+  id          String                  @id @default(cuid())
+  createdAt   DateTime                @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  eventId     String
+  event       Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  endpoint    String
+  success     Boolean?
+  status      Int?
+  message     String?
+  body        String?
+  transitions RowWorkflowTransition[]
+}
+
+// <--- END: Events --->
+
+// <!--- Analytics --->
+
+model AnalyticsSettings {
+  id          String  @id @default(cuid())
+  public      Boolean @default(false)
+  ignorePages String
+  onlyPages   String
+}
+
+model AnalyticsUniqueVisitor {
+  id             String              @id @default(cuid())
+  createdAt      DateTime            @default(now())
+  cookie         String              @unique
+  via            String?
+  httpReferrer   String?
+  browser        String?
+  browserVersion String?
+  os             String?
+  osVersion      String?
+  device         String?
+  source         String?
+  medium         String?
+  campaign       String?
+  content        String?
+  term           String?
+  country        String?
+  city           String?
+  fromUrl        String?
+  fromRoute      String?
+  pageViews      AnalyticsPageView[]
+  events         AnalyticsEvent[]
+  userId         String?
+  user           User?               @relation(fields: [userId], references: [id])
+}
+
+model AnalyticsPageView {
+  id              String                 @id @default(cuid())
+  createdAt       DateTime               @default(now())
+  uniqueVisitorId String
+  uniqueVisitor   AnalyticsUniqueVisitor @relation(fields: [uniqueVisitorId], references: [id], onDelete: Cascade)
+  url             String
+  route           String?
+}
+
+model AnalyticsEvent {
+  id              String                 @id @default(cuid())
+  createdAt       DateTime               @default(now())
+  uniqueVisitorId String
+  uniqueVisitor   AnalyticsUniqueVisitor @relation(fields: [uniqueVisitorId], references: [id], onDelete: Cascade)
+  action          String
+  category        String?
+  label           String?
+  value           String?
+  url             String?
+  route           String?
+  featureFlagId   String?
+  featureFlag     FeatureFlag?           @relation(fields: [featureFlagId], references: [id])
+}
+
+// <!--- Email marketing --->
+
+model EmailSender {
+  id             String          @id @default(cuid())
+  tenantId       String?
+  provider       String
+  stream         String
+  apiKey         String
+  fromEmail      String
+  fromName       String?
+  replyToEmail   String?
+  tenant         Tenant?         @relation(fields: [tenantId], references: [id])
+  campaigns      Campaign[]
+  outboundEmails OutboundEmail[]
+}
+
+model Campaign {
+  id            String          @id @default(cuid())
+  tenantId      String?
+  emailSenderId String
+  name          String
+  subject       String
+  htmlBody      String
+  textBody      String?
+  status        String          @default("draft")
+  track         Boolean
+  sentAt        DateTime?
+  emailSender   EmailSender     @relation(fields: [emailSenderId], references: [id])
+  recipients    OutboundEmail[]
+  tenant        Tenant?         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model OutboundEmail {
+  id               String               @id @default(cuid())
+  createdAt        DateTime             @default(now())
+  tenantId         String?
+  tenant           Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId       String?
+  campaign         Campaign?            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactRowId     String?
+  contactRow       Row?                 @relation(fields: [contactRowId], references: [id])
+  email            String
+  fromSenderId     String
+  isPreview        Boolean?
+  error            String?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  bouncedAt        DateTime?
+  spamComplainedAt DateTime?
+  unsubscribedAt   DateTime?
+  fromSender       EmailSender          @relation(fields: [fromSenderId], references: [id])
+  opens            OutboundEmailOpen[]
+  clicks           OutboundEmailClick[]
+}
+
+model OutboundEmailOpen {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now())
+  firstOpen       Boolean
+  outboundEmailId String
+  outboundEmail   OutboundEmail @relation(fields: [outboundEmailId], references: [id], onDelete: Cascade)
+}
+
+model OutboundEmailClick {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now())
+  link            String
+  outboundEmailId String
+  outboundEmail   OutboundEmail @relation(fields: [outboundEmailId], references: [id], onDelete: Cascade)
+}
+
+model Page {
+  id          String        @id @default(cuid())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  slug        String
+  isPublished Boolean       @default(false)
+  isPublic    Boolean       @default(false)
+  metaTags    PageMetaTag[]
+  blocks      PageBlock[]
+}
+
+model PageMetaTag {
+  id     String  @id @default(cuid())
+  pageId String?
+  page   Page?   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  order  Int?
+  name   String
+  value  String
+
+  @@unique([pageId, name, value])
+}
+
+model PageBlock {
+  id     String @id @default(cuid())
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id])
+  order  Int
+  type   String // hero, gallery, logoClouds, video...
+  value  String
+}
+
+model Tag {
+  id      String      @id @default(cuid())
+  name    String      @unique
+  color   Int?
+  users   TagUser[]
+  tenants TagTenant[]
+}
+
+model TagUser {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id])
+}
+
+model TagTenant {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  tagId    String
+  tag      Tag    @relation(fields: [tagId], references: [id])
+}
+
+model Onboarding {
+  id             String              @id @default(cuid())
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  title          String
+  type           String // modal, page
+  realtime       Boolean             @default(false)
+  active         Boolean             @default(false)
+  canBeDismissed Boolean             @default(true)
+  height         String?
+  filters        OnboardingFilter[]
+  steps          OnboardingStep[]
+  sessions       OnboardingSession[]
+}
+
+model OnboardingFilter {
+  id           String                         @id @default(cuid())
+  createdAt    DateTime                       @default(now())
+  onboardingId String
+  onboarding   Onboarding                     @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  type         String
+  value        String?
+  matches      OnboardingSessionFilterMatch[]
+}
+
+model OnboardingStep {
+  id           String                  @id @default(cuid())
+  onboardingId String
+  onboarding   Onboarding              @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  order        Int
+  block        String
+  sessionSteps OnboardingSessionStep[]
+}
+
+model OnboardingSession {
+  id              String                         @id @default(cuid())
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+  onboardingId    String
+  onboarding      Onboarding                     @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId        String?
+  tenant          Tenant?                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status          String // active, completed, dismissed
+  startedAt       DateTime?
+  completedAt     DateTime?
+  dismissedAt     DateTime?
+  createdRealtime Boolean                        @default(false)
+  matches         OnboardingSessionFilterMatch[]
+  sessionSteps    OnboardingSessionStep[]
+  actions         OnboardingSessionAction[]
+
+  @@unique([onboardingId, userId, tenantId])
+}
+
+model OnboardingSessionAction {
+  id                  String            @id @default(cuid())
+  createdAt           DateTime          @default(now())
+  onboardingSessionId String
+  onboardingSession   OnboardingSession @relation(fields: [onboardingSessionId], references: [id], onDelete: Cascade)
+  type                String
+  name                String
+  value               String
+}
+
+model OnboardingSessionFilterMatch {
+  id                  String            @id @default(cuid())
+  onboardingFilterId  String
+  onboardingFilter    OnboardingFilter  @relation(fields: [onboardingFilterId], references: [id], onDelete: Cascade)
+  onboardingSessionId String
+  onboardingSession   OnboardingSession @relation(fields: [onboardingSessionId], references: [id], onDelete: Cascade)
+}
+
+model OnboardingSessionStep {
+  id                  String            @id @default(cuid())
+  onboardingSessionId String
+  onboardingSession   OnboardingSession @relation(fields: [onboardingSessionId], references: [id], onDelete: Cascade)
+  stepId              String
+  step                OnboardingStep    @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  seenAt              DateTime?
+  completedAt         DateTime?
+}
+
+model TenantIpAddress {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeyId  String?
+  apiKey    ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  ip        String
+  fromUrl   String
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, ip, userId, apiKeyId])
+}
+
+model FeatureFlag {
+  id          String              @id @default(cuid())
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  name        String
+  description String
+  enabled     Boolean             @default(false)
+  events      AnalyticsEvent[]
+  filters     FeatureFlagFilter[]
+
+  @@unique([name, description])
+}
+
+model FeatureFlagFilter {
+  id            String      @id @default(cuid())
+  createdAt     DateTime    @default(now())
+  featureFlagId String
+  featureFlag   FeatureFlag @relation(fields: [featureFlagId], references: [id], onDelete: Cascade)
+  type          String // [FeatureFlagsFilterType] percentage, darkMode, language.is, page.is, analytics.browser.is...
+  value         String? // 0-100, true, false, en, de, fr, ...
+}
+
+model TenantSettingsRow {
+  tenantId String @unique
+  rowId    String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  row      Row    @relation(fields: [rowId], references: [id], onDelete: Cascade)
+}
+
+model PromptFlowGroup {
+  id          String                    @id @default(cuid())
+  createdAt   DateTime                  @default(now())
+  order       Int
+  title       String
+  description String
+  templates   PromptFlowGroupTemplate[]
+  promptFlows PromptFlow[]
+  entities    PromptFlowGroupEntity[]
+}
+
+model PromptFlowGroupTemplate {
+  id                String          @id @default(cuid())
+  createdAt         DateTime        @default(now())
+  order             Int
+  title             String
+  promptFlowGroupId String
+  promptFlowGroup   PromptFlowGroup @relation(fields: [promptFlowGroupId], references: [id], onDelete: Cascade)
+}
+
+model PromptFlowGroupEntity {
+  entityId          String
+  entity            Entity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  promptFlowGroupId String
+  promptFlowGroup   PromptFlowGroup @relation(fields: [promptFlowGroupId], references: [id], onDelete: Cascade)
+
+  @@id([entityId, promptFlowGroupId])
+}
+
+model PromptFlow {
+  id                String                    @id @default(cuid())
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  model             String // gpt-3.5-turbo, gpt-4...
+  title             String
+  description       String
+  actionTitle       String?
+  executionType     String                    @default("sequential") // sequential, parallel
+  promptFlowGroupId String?
+  stream            Boolean                   @default(false)
+  inputVariables    PromptFlowInputVariable[]
+  inputEntityId     String?
+  inputEntity       Entity?                   @relation(fields: [inputEntityId], references: [id], onDelete: Cascade)
+  promptFlowGroup   PromptFlowGroup?          @relation(fields: [promptFlowGroupId], references: [id], onDelete: Cascade)
+  templates         PromptTemplate[]
+  executions        PromptFlowExecution[]
+  outputs           PromptFlowOutput[]
+}
+
+model PromptFlowInputVariable {
+  id           String     @id @default(cuid())
+  promptFlowId String
+  promptFlow   PromptFlow @relation(fields: [promptFlowId], references: [id], onDelete: Cascade)
+  type         String
+  name         String
+  title        String
+  isRequired   Boolean
+}
+
+model PromptTemplate {
+  id                   String                    @id @default(cuid())
+  flowId               String
+  flow                 PromptFlow                @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  order                Int
+  title                String
+  template             String
+  temperature          Decimal
+  maxTokens            Int?
+  generations          Int?
+  results              PromptTemplateResult[]
+  inPromptFlowMappings PromptFlowOutputMapping[]
+}
+
+model PromptFlowOutput {
+  id           String                    @id @default(cuid())
+  promptFlowId String
+  promptFlow   PromptFlow                @relation(fields: [promptFlowId], references: [id], onDelete: Cascade)
+  type         String
+  entityId     String
+  entity       Entity                    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  mappings     PromptFlowOutputMapping[]
+}
+
+model PromptFlowOutputMapping {
+  id                 String           @id @default(cuid())
+  promptFlowOutputId String
+  promptFlowOutput   PromptFlowOutput @relation(fields: [promptFlowOutputId], references: [id], onDelete: Cascade)
+  promptTemplateId   String
+  promptTemplate     PromptTemplate   @relation(fields: [promptTemplateId], references: [id], onDelete: Cascade)
+  propertyId         String
+  property           Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([promptFlowOutputId, promptTemplateId, propertyId])
+}
+
+model PromptFlowExecution {
+  id          String                 @id @default(cuid())
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  flowId      String
+  flow        PromptFlow             @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  model       String?
+  userId      String?
+  user        User?                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId    String?
+  tenant      Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status      String // pending, running, success, error
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  duration    Int?
+  results     PromptTemplateResult[]
+}
+
+model PromptTemplateResult {
+  id              String              @id @default(cuid())
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  flowExecutionId String
+  flowExecution   PromptFlowExecution @relation(fields: [flowExecutionId], references: [id])
+  templateId      String?
+  template        PromptTemplate?     @relation(fields: [templateId], references: [id])
+  order           Int
+  status          String // pending, running, success, error
+  prompt          String
+  response        String?
+  error           String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+}
+
+model MetricLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  env       String
+  type      String // loader, action
+  route     String
+  url       String
+  function  String
+  duration  Int
+  userId    String?
+  tenantId  String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Formula {
+  id                 String             @id @default(cuid())
+  createdAt          DateTime           @default(now())
+  name               String
+  description        String?
+  resultAs           String // string, number, boolean, date
+  calculationTrigger String // one or many: always, onList, onCreated, onOverview, onEdit, custom, manual
+  withLogs           Boolean            @default(false)
+  components         FormulaComponent[]
+  inProperties       Property[]
+  logs               FormulaLog[]
+}
+
+model FormulaComponent {
+  id        String  @id @default(cuid())
+  formulaId String
+  formula   Formula @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  order     Int
+  type      String //name, operator, parenthesis, value
+  value     String
+}
+
+model FormulaLog {
+  id              String                @id @default(cuid())
+  createdAt       DateTime              @default(now())
+  formulaId       String
+  userId          String?
+  tenantId        String?
+  originalTrigger String?
+  triggeredBy     String
+  expression      String
+  result          String
+  duration        Int                   @default(0)
+  error           String?
+  rowValueId      String?
+  formula         Formula               @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  user            User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant          Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  components      FormulaComponentLog[]
+}
+
+model FormulaComponentLog {
+  id           String     @id @default(cuid())
+  order        Int
+  type         String //name, operator, parenthesis, value
+  value        String
+  rowId        String?
+  row          Row?       @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  formulaLogId String
+  formulaLog   FormulaLog @relation(fields: [formulaLogId], references: [id], onDelete: Cascade)
+}
+
+model EntityGroup {
+  id          String              @id @default(cuid())
+  createdAt   DateTime            @default(now())
+  order       Int
+  slug        String
+  title       String
+  icon        String
+  collapsible Boolean
+  section     String?
+  entities    EntityGroupEntity[]
+
+  @@unique([slug])
+}
+
+model EntityGroupEntity {
+  id            String      @id @default(cuid())
+  entityGroupId String
+  entityGroup   EntityGroup @relation(fields: [entityGroupId], references: [id], onDelete: Cascade)
+  entityId      String
+  entity        Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  allViewId     String?
+  allView       EntityView? @relation(fields: [allViewId], references: [id], onDelete: Cascade)
+}
+
+model TenantType {
+  id                   String                   @id @default(cuid())
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  title                String                   @unique
+  titlePlural          String
+  description          String?
+  isDefault            Boolean                  @default(false)
+  tenants              Tenant[]
+  fromTypes            TenantTypeRelationship[] @relation("fromType")
+  toTypes              TenantTypeRelationship[] @relation("toType")
+  subscriptionProducts SubscriptionProduct[]
+  entities             TenantTypeEntity[]
+}
+
+model TenantTypeEntity {
+  id           String      @id @default(cuid())
+  tenantTypeId String?
+  tenantType   TenantType? @relation(fields: [tenantTypeId], references: [id], onDelete: Cascade)
+  entityId     String
+  entity       Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  enabled      Boolean
+}
+
+model TenantTypeRelationship {
+  id            String               @id @default(cuid())
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  canCreate     Boolean              @default(false)
+  fromTypeId    String?
+  toTypeId      String?
+  fromType      TenantType?          @relation(name: "fromType", fields: [fromTypeId], references: [id], onDelete: Cascade)
+  toType        TenantType?          @relation(name: "toType", fields: [toTypeId], references: [id], onDelete: Cascade)
+  permissions   Permission[]
+  relationships TenantRelationship[]
+
+  @@unique([fromTypeId, toTypeId])
+}
+
+model TenantRelationship {
+  id                       String                 @id @default(cuid())
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  tenantTypeRelationshipId String
+  fromTenantId             String
+  toTenantId               String
+  createdByUserId          String?
+  tenantTypeRelationship   TenantTypeRelationship @relation(fields: [tenantTypeRelationshipId], references: [id], onDelete: Cascade)
+  fromTenant               Tenant                 @relation(name: "fromTenant", fields: [fromTenantId], references: [id], onDelete: Cascade)
+  toTenant                 Tenant                 @relation(name: "toTenant", fields: [toTenantId], references: [id], onDelete: Cascade)
+  createdByUser            User?                  @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+
+  @@unique([fromTenantId, toTenantId])
+}
+
+model KnowledgeBase {
+  id              String                  @id @default(cuid())
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  basePath        String
+  slug            String
+  title           String
+  description     String
+  defaultLanguage String
+  layout          String
+  color           Int
+  enabled         Boolean
+  languages       String
+  links           String
+  logo            String
+  seoImage        String
+  categories      KnowledgeBaseCategory[]
+  articles        KnowledgeBaseArticle[]
+  views           KnowledgeBaseViews[]
+
+  @@unique([slug])
+}
+
+model KnowledgeBaseCategory {
+  id              String                         @id @default(cuid())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase                  @relation(fields: [knowledgeBaseId], references: [id])
+  slug            String
+  order           Int
+  title           String
+  description     String
+  icon            String
+  language        String
+  seoImage        String
+  sections        KnowledgeBaseCategorySection[]
+  articles        KnowledgeBaseArticle[]
+
+  @@unique([knowledgeBaseId, slug])
+}
+
+model KnowledgeBaseCategorySection {
+  id          String                 @id @default(cuid())
+  categoryId  String
+  category    KnowledgeBaseCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  order       Int
+  title       String
+  description String
+  articles    KnowledgeBaseArticle[]
+}
+
+model KnowledgeBaseArticle {
+  id                     String                          @id @default(cuid())
+  createdAt              DateTime                        @default(now())
+  updatedAt              DateTime?                       @updatedAt
+  knowledgeBaseId        String
+  knowledgeBase          KnowledgeBase                   @relation(fields: [knowledgeBaseId], references: [id])
+  categoryId             String?
+  category               KnowledgeBaseCategory?          @relation(fields: [categoryId], references: [id])
+  sectionId              String?
+  section                KnowledgeBaseCategorySection?   @relation(fields: [sectionId], references: [id])
+  slug                   String
+  title                  String
+  description            String
+  order                  Int
+  contentDraft           String
+  contentPublished       String                          @default("")
+  contentPublishedAsText String                          @default("")
+  contentType            String
+  language               String
+  featuredOrder          Int?
+  seoImage               String
+  publishedAt            DateTime?
+  relatedInArticleId     String?
+  createdByUserId        String?
+  createdByUser          User?                           @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  views                  KnowledgeBaseArticleViews[]
+  upvotes                KnowledgeBaseArticleUpvotes[]
+  downvotes              KnowledgeBaseArticleDownvotes[]
+  relatedArticles        KnowledgeBaseRelatedArticle[]   @relation(name: "relatedArticles")
+  relatedInArticles      KnowledgeBaseRelatedArticle[]   @relation(name: "relatedInArticles")
+
+  @@unique([knowledgeBaseId, slug])
+}
+
+model KnowledgeBaseRelatedArticle {
+  id               String               @id @default(cuid())
+  articleId        String
+  article          KnowledgeBaseArticle @relation(name: "relatedArticles", fields: [articleId], references: [id], onDelete: Cascade)
+  relatedArticle   KnowledgeBaseArticle @relation(name: "relatedInArticles", fields: [relatedArticleId], references: [id], onDelete: Cascade)
+  relatedArticleId String
+}
+
+model KnowledgeBaseViews {
+  id              String        @id @default(cuid())
+  createdAt       DateTime      @default(now())
+  knowledgeBaseId String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  userAnalyticsId String
+
+  @@unique([knowledgeBaseId, userAnalyticsId])
+}
+
+model KnowledgeBaseArticleViews {
+  knowledgeBaseArticleId String
+  knowledgeBaseArticle   KnowledgeBaseArticle @relation(fields: [knowledgeBaseArticleId], references: [id], onDelete: Cascade)
+  userAnalyticsId        String
+
+  @@unique([knowledgeBaseArticleId, userAnalyticsId])
+}
+
+model KnowledgeBaseArticleUpvotes {
+  createdAt              DateTime             @default(now())
+  knowledgeBaseArticleId String
+  knowledgeBaseArticle   KnowledgeBaseArticle @relation(fields: [knowledgeBaseArticleId], references: [id], onDelete: Cascade)
+  userAnalyticsId        String
+
+  @@unique([knowledgeBaseArticleId, userAnalyticsId])
+}
+
+model KnowledgeBaseArticleDownvotes {
+  createdAt              DateTime             @default(now())
+  knowledgeBaseArticleId String
+  knowledgeBaseArticle   KnowledgeBaseArticle @relation(fields: [knowledgeBaseArticleId], references: [id], onDelete: Cascade)
+  userAnalyticsId        String
+
+  @@unique([knowledgeBaseArticleId, userAnalyticsId])
+}
+
+model FileUploadProgress {
+  id              String  @id @default(cuid())
+  fileName        String
+  progressServer  Int
+  progressStorage Int
+  url             String?
+  error           String?
+}
